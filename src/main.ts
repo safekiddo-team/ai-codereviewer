@@ -82,6 +82,7 @@ function createPrompt(file: File, chunk: Chunk, prDetails: PRDetails): string {
   return `Your task is to review pull requests. Instructions:
 - Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
 - Do not give positive comments or compliments.
+- Identify any potential bugs, suggest improvements, and ensure the code follows best practices.
 - Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
 - Write the comment in GitHub Markdown format.
 - Use the given description only for the overall context and only comment the code.
@@ -117,7 +118,7 @@ async function getAIResponse(prompt: string): Promise<Array<{
   const queryConfig = {
     model: OPENAI_API_MODEL,
     temperature: 0.2,
-    max_tokens: 700,
+    max_tokens: 1000,
     top_p: 1,
     frequency_penalty: 0,
     presence_penalty: 0,
@@ -127,7 +128,7 @@ async function getAIResponse(prompt: string): Promise<Array<{
     const response = await openai.chat.completions.create({
       ...queryConfig,
       // return JSON if the model supports it:
-      ...(OPENAI_API_MODEL === "gpt-4-1106-preview"
+      ...(OPENAI_API_MODEL === "gpt-4o"
         ? { response_format: { type: "json_object" } }
         : {}),
       messages: [
