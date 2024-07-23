@@ -2,15 +2,19 @@ import { readFileSync } from "fs";
 import * as core from "@actions/core";
 import OpenAI from "openai";
 import { Octokit } from "@octokit/rest";
-import parseDiff, { Chunk, File } from "parse-diff";
-import minimatch from "minimatch";
+import parseDiff, {AddChange, Chunk, File, NormalChange} from "parse-diff";
+import  {Minimatch} from "minimatch";
+
+// Models that support response_type: "json_object"
+const AVAILABLE_MODELS: string[] = ['gpt-4o','gpt-4o-mini','gpt-4-turbo','gpt-4','gpt-3-turbo']
+
 
 const GITHUB_TOKEN: string = core.getInput("GITHUB_TOKEN");
 const OPENAI_API_KEY: string = core.getInput("OPENAI_API_KEY");
-const OPENAI_API_MODEL: string = core.getInput("OPENAI_API_MODEL");
+const OPENAI_API_MODEL: string = AVAILABLE_MODELS.includes(core.getInput('OPENAI_API_MODEL')) ? core.getInput("OPENAI_API_MODEL") : "gpt-4o-mini";
 const MAX_TOKENS: number = Number(core.getInput("max_tokens"));
-
 const octokit = new Octokit({ auth: GITHUB_TOKEN });
+
 
 const openai = new OpenAI({
   apiKey: OPENAI_API_KEY,
@@ -105,8 +109,8 @@ Git diff to review:
 \`\`\`diff
 ${chunk.content}
 ${chunk.changes
-  // @ts-expect-error - ln and ln2 exists where needed
-  .map((c) => `${c.ln ? c.ln : c.ln2} ${c.content}`)
+  //@ts-expect-error - ln and ln2 exists where needed
+  .map((c: NormalChange & AddChange) => `${c.ln ? c.ln : c.ln2} ${c.content}`)
   .join("\n")}
 \`\`\`
 `;
@@ -129,9 +133,7 @@ async function getAIResponse(prompt: string): Promise<Array<{
     const response = await openai.chat.completions.create({
       ...queryConfig,
       // return JSON if the model supports it:
-      ...(OPENAI_API_MODEL === "gpt-4-turbo"
-        ? { response_format: { type: "json_object" } }
-        : {}),
+      ...{ response_format: { type: "json_object" } },
       messages: [
         {
           role: "system",
@@ -139,7 +141,6 @@ async function getAIResponse(prompt: string): Promise<Array<{
         },
       ],
     });
-
     const res = response.choices[0].message?.content?.trim() || "{}";
     return JSON.parse(res).reviews;
   } catch (error) {
@@ -230,7 +231,7 @@ async function main() {
 
   const filteredDiff = parsedDiff.filter((file) => {
     return !excludePatterns.some((pattern) =>
-      minimatch(file.to ?? "", pattern)
+      new Minimatch(pattern).match(file.to ?? "")
     );
   });
 
